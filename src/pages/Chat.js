@@ -12,9 +12,13 @@ const Chat = () => {
   const [message, setMessage] = useState('');
   const [messages, setMessages] = useState([]);
 
-  // Générer un ID utilisateur unique lors de la première connexion
+  // Générer ou récupérer un ID utilisateur unique lors de la première connexion
   useEffect(() => {
-    const userId = `user_${Date.now()}`;
+    let userId = localStorage.getItem('userId');
+    if (!userId) {
+      userId = `user_${Date.now()}`;
+      localStorage.setItem('userId', userId);
+    }
     setUserId(userId);
     addUser(userId);
 
@@ -25,6 +29,23 @@ const Chat = () => {
       }
     };
   }, []);
+
+  // Ajouter un gestionnaire pour l'événement beforeunload
+  useEffect(() => {
+    const handleBeforeUnload = (event) => {
+      if (chatting) {
+        event.preventDefault();
+        event.returnValue = ''; // Afficher un message de confirmation
+        return '';
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [chatting]);
 
   // Écouter les changements d'état de l'utilisateur
   useEffect(() => {
@@ -125,6 +146,23 @@ const Chat = () => {
     setChatting(true);
   };
 
+  // Arrêter la conversation actuelle
+  const stopConversation = () => {
+    if (conversationId) {
+      updateUserStatus(userId, { chatting: false, partnerId: null, waiting: false });
+      setConversationId(null);
+      setChatting(false);
+      setMessages([]);
+      setWaitingForPartner(false);
+    }
+  };
+
+  // Passer à une nouvelle conversation
+  const switchConversation = () => {
+    stopConversation();
+    findPartner(userId);
+  };
+
   // Envoyer un message dans la conversation
   const sendMessage = (e) => {
     e.preventDefault();
@@ -156,6 +194,10 @@ const Chat = () => {
             />
             <button type="submit">Send</button>
           </form>
+          <div className='d-flex flex-direction-row justify-content-around mb-2'>  
+            <button className="btn btn-danger" onClick={stopConversation}>Stop</button>
+            <button className="btn btn-success" onClick={switchConversation}>Skip</button>
+          </div>
         </div>
       ) : (
         <div className="waiting">
