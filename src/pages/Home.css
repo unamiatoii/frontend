@@ -1,0 +1,30 @@
+body {
+  background-color: var(--color-black);
+  color: var(--color-yellow);
+}
+
+h3 {
+  animation: fadeIn 2s ease-in-out;
+}
+
+button {
+  transition: background-color 0.3s, transform 0.3s;
+}
+
+button:hover {
+  background-color: var(--color-brown);
+  border-color: var(--color-brown);
+  color: var(--color-black);
+  transform: scale(1.1);
+}
+
+@keyframes fadeIn {
+  0% {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
