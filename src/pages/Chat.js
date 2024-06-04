@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { publicIpv4 } from 'public-ip';
 import { ref, push, onChildAdded, onValue, set, update, remove } from "firebase/database";
 import { database } from './../database/firebase';
+import CryptoJS from 'crypto-js';
 import './Chat.css';
 
 const Chat = () => {
@@ -32,11 +33,11 @@ const Chat = () => {
         removeUser(userId);
       }
     };
-  }, [userId]);
+  }, []);
 
   const addUser = (userId) => {
     const userRef = ref(database, `users/${userId}`);
-    set(userRef, { userId, active: true });
+    set(userRef, { userId, active: true, chatting: false });
   };
 
   const removeUser = (userId) => {
@@ -87,6 +88,29 @@ const Chat = () => {
         });
       }, 5000);
       return () => clearTimeout(timer);
+    }
+  }, [userId]);
+
+  useEffect(() => {
+    if (userId) {
+      const userRef = ref(database, `users/${userId}`);
+      onValue(userRef, (snapshot) => {
+        const user = snapshot.val();
+        if (user.chatting && !chatting) {
+          setChatting(true);
+          const conversationsRef = ref(database, 'conversations');
+          onValue(conversationsRef, (snapshot) => {
+            const conversations = snapshot.val();
+            for (let convId in conversations) {
+              const conv = conversations[convId];
+              if (conv.participants.includes(userId)) {
+                setConversationId(convId);
+                break;
+              }
+            }
+          });
+        }
+      });
     }
   }, [userId]);
 
