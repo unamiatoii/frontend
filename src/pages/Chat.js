@@ -1,9 +1,7 @@
 // src/Chat.js
 import React, { useState, useEffect } from 'react';
-import { publicIpv4 } from 'public-ip';
-import { ref, push, onChildAdded, onValue, set, update, remove } from "firebase/database";
+import { ref, push, onChildAdded, onValue, set, update, remove, off } from "firebase/database";
 import { database } from './../database/firebase';
-import CryptoJS from 'crypto-js';
 import './Chat.css';
 
 const Chat = () => {
@@ -14,20 +12,13 @@ const Chat = () => {
   const [message, setMessage] = useState('');
   const [messages, setMessages] = useState([]);
 
+  // Générer un ID utilisateur unique lors de la première connexion
   useEffect(() => {
-    const fetchIp = async () => {
-      const ip = await publicIpv4();
-      const userId = generateUserId(ip);
-      setUserId(userId);
-      addUser(userId);
-    };
+    const userId = `user_${Date.now()}`;
+    setUserId(userId);
+    addUser(userId);
 
-    const generateUserId = (ipAddress) => {
-      return CryptoJS.MD5(ipAddress).toString();
-    };
-
-    fetchIp();
-
+    // Nettoyer les données utilisateur à la déconnexion
     return () => {
       if (userId) {
         removeUser(userId);
@@ -35,38 +26,92 @@ const Chat = () => {
     };
   }, []);
 
+  // Écouter les changements d'état de l'utilisateur
+  useEffect(() => {
+    if (userId) {
+      const userRef = ref(database, `users/${userId}`);
+      const unsubscribe = onValue(userRef, (snapshot) => {
+        const user = snapshot.val();
+        if (user && user.chatting) {
+          // Si l'utilisateur est en conversation, trouver la conversation existante
+          findExistingConversation(userId);
+        } else if (!user.waiting) {
+          // Si l'utilisateur n'est pas en attente, chercher un partenaire
+          findPartner(userId);
+        }
+      });
+      // Nettoyer les écouteurs Firebase
+      return () => off(userRef, unsubscribe);
+    }
+  }, [userId]);
+
+  // Écouter les nouveaux messages dans la conversation
+  useEffect(() => {
+    if (conversationId) {
+      const messagesRef = ref(database, `conversations/${conversationId}/messages`);
+      const unsubscribe = onChildAdded(messagesRef, (snapshot) => {
+        const newMessage = snapshot.val();
+        setMessages((prevMessages) => [...prevMessages, newMessage]);
+      });
+      // Nettoyer les écouteurs Firebase
+      return () => off(messagesRef, unsubscribe);
+    }
+  }, [conversationId]);
+
+  // Ajouter un nouvel utilisateur à la base de données
   const addUser = (userId) => {
     const userRef = ref(database, `users/${userId}`);
     set(userRef, { userId, active: true, chatting: false, partnerId: null });
   };
 
+  // Supprimer un utilisateur de la base de données
   const removeUser = (userId) => {
     const userRef = ref(database, `users/${userId}`);
     remove(userRef);
   };
 
+  // Mettre à jour le statut de l'utilisateur dans la base de données
   const updateUserStatus = (userId, status) => {
     const userRef = ref(database, `users/${userId}`);
     update(userRef, status);
   };
 
+  // Trouver un partenaire disponible pour discuter
   const findPartner = (userId) => {
     const usersRef = ref(database, 'users');
     onValue(usersRef, (snapshot) => {
       const users = snapshot.val();
       const availableUsers = Object.keys(users).filter(id => id !== userId && !users[id].chatting);
-      
+
       if (availableUsers.length > 0) {
+        // Si un partenaire est disponible, démarrer une conversation
         const partnerId = availableUsers[Math.floor(Math.random() * availableUsers.length)];
         startConversation(userId, partnerId);
       } else {
+        // Si aucun partenaire n'est disponible, mettre l'utilisateur en attente
         setWaitingForPartner(true);
-        const userRef = ref(database, `users/${userId}`);
-        update(userRef, { waiting: true });
+        updateUserStatus(userId, { waiting: true });
       }
-    });
+    }, { onlyOnce: true });
   };
 
+  // Trouver une conversation existante pour l'utilisateur
+  const findExistingConversation = (userId) => {
+    const conversationsRef = ref(database, 'conversations');
+    onValue(conversationsRef, (snapshot) => {
+      const conversations = snapshot.val();
+      for (let convId in conversations) {
+        const conv = conversations[convId];
+        if (conv.participants.includes(userId)) {
+          setConversationId(convId);
+          setChatting(true);
+          break;
+        }
+      }
+    }, { onlyOnce: true });
+  };
+
+  // Démarrer une nouvelle conversation entre deux utilisateurs
   const startConversation = (userId, partnerId) => {
     const conversationRef = push(ref(database, 'conversations'));
     const conversationId = conversationRef.key;
@@ -80,41 +125,7 @@ const Chat = () => {
     setChatting(true);
   };
 
-  useEffect(() => {
-    if (userId) {
-      const userRef = ref(database, `users/${userId}`);
-      onValue(userRef, (snapshot) => {
-        const user = snapshot.val();
-        if (user.chatting) {
-          const conversationsRef = ref(database, 'conversations');
-          onValue(conversationsRef, (snapshot) => {
-            const conversations = snapshot.val();
-            for (let convId in conversations) {
-              const conv = conversations[convId];
-              if (conv.participants.includes(userId)) {
-                setConversationId(convId);
-                setChatting(true);
-                break;
-              }
-            }
-          });
-        } else if (!user.waiting) {
-          findPartner(userId);
-        }
-      });
-    }
-  }, [userId]);
-
-  useEffect(() => {
-    if (conversationId) {
-      const messagesRef = ref(database, `conversations/${conversationId}/messages`);
-      onChildAdded(messagesRef, (snapshot) => {
-        const newMessage = snapshot.val();
-        setMessages((prevMessages) => [...prevMessages, newMessage]);
-      });
-    }
-  }, [conversationId]);
-
+  // Envoyer un message dans la conversation
   const sendMessage = (e) => {
     e.preventDefault();
     if (message.trim() !== '' && conversationId) {
