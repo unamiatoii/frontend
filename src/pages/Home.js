@@ -12,7 +12,7 @@ const Home = () => {
 
   return (
     <div className="container p-4 d-flex flex-column justify-content-center align-items-center text-center" style={styles.container}>
-      <h3 className="mb-4 title">
+      <h3 className="mb-4" style={styles.title}>
         Faites-vous des ami(e)s, et bien plus encore, partout et à tout moment
       </h3>
       <button className="btn btn-dark btn-lg" onClick={startChat} style={styles.button}>
@@ -25,6 +25,10 @@ const Home = () => {
 const styles = {
   container: {
     height: '100vh',
+  },
+  title: {
+    color: 'var(--color-yellow)',
+    fontSize: '2rem',
   },
   button: {
     backgroundColor: 'var(--color-yellow)',
