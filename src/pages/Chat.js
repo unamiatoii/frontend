@@ -16,10 +16,15 @@ const Chat = () => {
   useEffect(() => {
     const fetchIp = async () => {
       const ip = await publicIpv4();
-      setUserId(ip.replace(/\./g, '_')); // Remplacer les points par des underscores pour éviter les problèmes de clé
-      addUser(ip);
+      const userId = generateUserId(ip); // Function to generate a valid user ID
+      setUserId(userId);
+      addUser(userId);
     };
-
+   
+    function generateUserId(ipAddress) {
+      const hash = CryptoJS.MD5(ipAddress).toString();
+      return hash;
+    }
     fetchIp();
 
     return () => {

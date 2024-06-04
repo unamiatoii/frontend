@@ -1,3 +1,9 @@
 .chat-box{
     border-radius: 12px;
+    
+}
+.chat-page{
+    margin: 0 auto;
+    min-height: 10rem;
+    background-color: beige;
 }
