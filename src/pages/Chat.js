@@ -17,15 +17,15 @@ const Chat = () => {
   useEffect(() => {
     const fetchIp = async () => {
       const ip = await publicIpv4();
-      const userId = generateUserId(ip); // Function to generate a valid user ID
+      const userId = generateUserId(ip);
       setUserId(userId);
       addUser(userId);
     };
-   
-    function generateUserId(ipAddress) {
-      const hash = CryptoJS.MD5(ipAddress).toString();
-      return hash;
-    }
+
+    const generateUserId = (ipAddress) => {
+      return CryptoJS.MD5(ipAddress).toString();
+    };
+
     fetchIp();
 
     return () => {
@@ -37,7 +37,7 @@ const Chat = () => {
 
   const addUser = (userId) => {
     const userRef = ref(database, `users/${userId}`);
-    set(userRef, { userId, active: true, chatting: false });
+    set(userRef, { userId, active: true, chatting: false, partnerId: null });
   };
 
   const removeUser = (userId) => {
@@ -45,59 +45,47 @@ const Chat = () => {
     remove(userRef);
   };
 
-  const updateUserChatStatus = (userId, status) => {
+  const updateUserStatus = (userId, status) => {
     const userRef = ref(database, `users/${userId}`);
-    update(userRef, { chatting: status });
+    update(userRef, status);
   };
 
-  const getAvailableUsers = (userId, callback) => {
+  const findPartner = (userId) => {
     const usersRef = ref(database, 'users');
     onValue(usersRef, (snapshot) => {
       const users = snapshot.val();
-      const availableUsers = Object.keys(users).filter((id) => id !== userId && !users[id].chatting);
-      callback(availableUsers);
+      const availableUsers = Object.keys(users).filter(id => id !== userId && !users[id].chatting);
+      
+      if (availableUsers.length > 0) {
+        const partnerId = availableUsers[Math.floor(Math.random() * availableUsers.length)];
+        startConversation(userId, partnerId);
+      } else {
+        setWaitingForPartner(true);
+        const userRef = ref(database, `users/${userId}`);
+        update(userRef, { waiting: true });
+      }
     });
   };
 
-  const startConversation = (userId, partnerId, callback) => {
-    const conversationsRef = ref(database, 'conversations');
-    const newConversationRef = push(conversationsRef);
-    const conversationId = newConversationRef.key;
-    set(newConversationRef, {
+  const startConversation = (userId, partnerId) => {
+    const conversationRef = push(ref(database, 'conversations'));
+    const conversationId = conversationRef.key;
+    set(conversationRef, {
       participants: [userId, partnerId],
       messages: [],
     });
-    updateUserChatStatus(userId, true);
-    updateUserChatStatus(partnerId, true);
-    callback(conversationId);
+    updateUserStatus(userId, { chatting: true, partnerId, waiting: false });
+    updateUserStatus(partnerId, { chatting: true, partnerId: userId, waiting: false });
+    setConversationId(conversationId);
+    setChatting(true);
   };
-
-  useEffect(() => {
-    if (userId) {
-      const timer = setTimeout(() => {
-        getAvailableUsers(userId, (availableUsers) => {
-          if (availableUsers.length > 0) {
-            const partnerId = availableUsers[Math.floor(Math.random() * availableUsers.length)];
-            startConversation(userId, partnerId, (conversationId) => {
-              setConversationId(conversationId);
-              setChatting(true);
-            });
-          } else {
-            setWaitingForPartner(true);
-          }
-        });
-      }, 5000);
-      return () => clearTimeout(timer);
-    }
-  }, [userId]);
 
   useEffect(() => {
     if (userId) {
       const userRef = ref(database, `users/${userId}`);
       onValue(userRef, (snapshot) => {
         const user = snapshot.val();
-        if (user.chatting && !chatting) {
-          setChatting(true);
+        if (user.chatting) {
           const conversationsRef = ref(database, 'conversations');
           onValue(conversationsRef, (snapshot) => {
             const conversations = snapshot.val();
@@ -105,10 +93,13 @@ const Chat = () => {
               const conv = conversations[convId];
               if (conv.participants.includes(userId)) {
                 setConversationId(convId);
+                setChatting(true);
                 break;
               }
             }
           });
+        } else if (!user.waiting) {
+          findPartner(userId);
         }
       });
     }
