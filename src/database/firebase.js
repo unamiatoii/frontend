@@ -1,6 +1,7 @@
 // src/firebase.js
-import { initializeApp } from "firebase/app";
-import { getDatabase } from "firebase/database";
+import { initializeApp } from 'firebase/app';
+import { getDatabase } from 'firebase/database';
+import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 
 const firebaseConfig = {
   apiKey: "AIzaSyDU6ONkr_AUsghYYeDuFRE7x_Yk464XDgA",
@@ -13,8 +14,9 @@ const firebaseConfig = {
   measurementId: "G-FZ5K1EHY3J"
 };
 
-// Initialize Firebase
 const app = initializeApp(firebaseConfig);
 const database = getDatabase(app);
+const auth = getAuth(app);
 
-export { database };
+export { database, auth, signInAnonymously, onAuthStateChanged };
+

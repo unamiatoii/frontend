@@ -1,7 +1,7 @@
 body {
   background-color: var(--color-black);
   color: var(--color-yellow);
-  padding: 1rem;
+  padding: 0.5rem;
 }
 
 h3 {
