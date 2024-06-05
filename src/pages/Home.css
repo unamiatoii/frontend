@@ -1,6 +1,7 @@
 body {
   background-color: var(--color-black);
   color: var(--color-yellow);
+  padding: 1rem;
 }
 
 h3 {
@@ -27,4 +28,56 @@ button:hover {
     opacity: 1;
     transform: translateY(0);
   }
+}
+.home-container {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+ 
+  text-align: center;
+}
+
+.logo-container {
+  margin-bottom: 20px;
+}
+
+.logo {
+  width: 150px;
+  height: auto;
+}
+
+.title {
+  color: var(--color-yellow);
+  font-size: 2rem;
+  margin-bottom: 20px;
+}
+
+.start-chat-button {
+  background-color: var(--color-yellow);
+  border-color: var(--color-yellow);
+  color: var(--color-black);
+  padding: 15px 30px;
+  font-size: 1.25rem;
+  transition: background-color 0.3s, border-color 0.3s;
+}
+
+.start-chat-button:hover {
+  background-color: var(--color-yellow-dark);
+  border-color: var(--color-yellow-dark);
+}
+
+.chatting-count {
+  margin-top: 40px;
+}
+
+.chatting-count h1 {
+  font-size: 3rem;
+  color: wheat;
+}
+
+.chatting-count h2 {
+  font-size: 1.5rem;
+  color: var(--color-gray);
 }
