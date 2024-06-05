@@ -173,7 +173,17 @@ const useChat = () => {
   const stopConversation = () => {
     if (conversationId) {
       update(ref(database, `conversations/${conversationId}`), { status: 'ended' });
-      updateUserStatus(userId, { chatting: false, partnerId: null, waiting: false });
+
+      const conversationRef = ref(database, `conversations/${conversationId}`);
+      onValue(conversationRef, (snapshot) => {
+        const conversation = snapshot.val();
+        if (conversation) {
+          conversation.participants.forEach(participantId => {
+            updateUserStatus(participantId, { chatting: false, waiting: false, partnerId: null });
+          });
+        }
+      });
+
       setConversationId(null);
       setChatting(false);
       setMessages([]);
@@ -182,8 +192,10 @@ const useChat = () => {
   };
 
   const switchConversation = () => {
-    stopConversation();
-    findPartner(userId);
+    if (conversationId) {
+      stopConversation();
+      setTimeout(() => findPartner(userId), 1000);  // Ajout d'un léger délai pour éviter les conflits de synchronisation
+    }
   };
 
   const sendMessage = (e) => {

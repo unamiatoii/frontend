@@ -37,7 +37,7 @@ const Chat = () => {
               onChange={handleTyping}
               placeholder="Tapez votre message..."
             />
-            <button className='btn btn-success' type="submit">Envoyer</button>
+            <button type="submit">Envoyer</button>
           </form>
           <div className='d-flex flex-direction-row justify-content-around mb-2'>  
             <button className="btn btn-danger" onClick={stopConversation}>Arrêter</button>
