@@ -1,9 +1,13 @@
 // src/hooks/useChat.js
 import { useState, useEffect } from 'react';
 import { ref, push, onChildAdded, onValue, set, update, remove, off } from 'firebase/database';
-import { database, auth, signInAnonymously, onAuthStateChanged } from './../database/firebase';
+import { database } from '../database/firebase';
+
+// Générer un identifiant unique pour chaque utilisateur
+const generateUniqueId = () => '_' + Math.random().toString(36).substr(2, 9);
 
 const useChat = () => {
+  // États pour gérer les informations et la logique de chat
   const [userId, setUserId] = useState(null);
   const [chatting, setChatting] = useState(false);
   const [waitingForPartner, setWaitingForPartner] = useState(false);
@@ -11,53 +15,31 @@ const useChat = () => {
   const [message, setMessage] = useState('');
   const [messages, setMessages] = useState([]);
   const [conversationEnded, setConversationEnded] = useState(false);
-  const [typing, setTyping] = useState(false);
   const [partnerTyping, setPartnerTyping] = useState(false);
 
+  // Initialiser l'utilisateur à la première utilisation
   useEffect(() => {
-    signInAnonymously(auth).catch(error => {
-      console.error('Error signing in anonymously:', error);
-    });
+    let storedUserId = localStorage.getItem('userId');
+    if (!storedUserId) {
+      storedUserId = generateUniqueId();
+      localStorage.setItem('userId', storedUserId);
+    }
+    setUserId(storedUserId);
 
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user) {
-        setUserId(user.uid);
-        addUser(user.uid);
-      }
-    });
+    // Ajouter l'utilisateur à la base de données
+    addUser(storedUserId);
 
-    const handleBeforeUnload = () => {
-      if (userId) {
-        removeUser(userId);
-      }
-    };
+    // Nettoyage lors du déchargement de la page
+    const handleBeforeUnload = () => removeUser(storedUserId);
     window.addEventListener('beforeunload', handleBeforeUnload);
 
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
-      if (userId) {
-        removeUser(userId);
-      }
-      unsubscribe();
+      removeUser(storedUserId);
     };
   }, []);
 
-  useEffect(() => {
-    const handleBeforeUnload = (event) => {
-      if (chatting) {
-        event.preventDefault();
-        event.returnValue = ''; // Afficher un message de confirmation
-        return '';
-      }
-    };
-
-    window.addEventListener('beforeunload', handleBeforeUnload);
-
-    return () => {
-      window.removeEventListener('beforeunload', handleBeforeUnload);
-    };
-  }, [chatting]);
-
+  // Chercher un partenaire ou gérer une conversation existante
   useEffect(() => {
     if (userId) {
       const userRef = ref(database, `users/${userId}`);
@@ -73,6 +55,7 @@ const useChat = () => {
     }
   }, [userId]);
 
+  // Charger les messages et surveiller l'état de la conversation
   useEffect(() => {
     if (conversationId) {
       const messagesRef = ref(database, `conversations/${conversationId}/messages`);
@@ -89,11 +72,7 @@ const useChat = () => {
             setChatting(false);
             setConversationEnded(true);
           }
-          if (conversation.typing && conversation.typing !== userId) {
-            setPartnerTyping(true);
-          } else {
-            setPartnerTyping(false);
-          }
+          setPartnerTyping(conversation.typing && conversation.typing !== userId);
         }
       });
 
@@ -104,27 +83,32 @@ const useChat = () => {
     }
   }, [conversationId]);
 
+  // Ajouter un utilisateur à la base
   const addUser = (userId) => {
     const userRef = ref(database, `users/${userId}`);
-    set(userRef, { userId, active: true, chatting: false, partnerId: null });
+    set(userRef, { userId, active: true, chatting: false, waiting: false });
   };
 
+  // Supprimer un utilisateur de la base
   const removeUser = (userId) => {
     const userRef = ref(database, `users/${userId}`);
     remove(userRef);
   };
 
+  // Mettre à jour le statut d'un utilisateur
   const updateUserStatus = (userId, status) => {
     const userRef = ref(database, `users/${userId}`);
     update(userRef, status);
   };
 
+  // Trouver un partenaire de chat
   const findPartner = (userId) => {
     const usersRef = ref(database, 'users');
     onValue(usersRef, (snapshot) => {
       const users = snapshot.val();
       if (users) {
-        const availableUsers = Object.keys(users).filter(id => id !== userId && !users[id].chatting);
+        const availableUsers = Object.keys(users).filter(id => 
+          id !== userId && users[id].active && !users[id].chatting);
 
         if (availableUsers.length > 0) {
           const partnerId = availableUsers[Math.floor(Math.random() * availableUsers.length)];
@@ -137,6 +121,7 @@ const useChat = () => {
     }, { onlyOnce: true });
   };
 
+  // Trouver une conversation existante
   const findExistingConversation = (userId) => {
     const conversationsRef = ref(database, 'conversations');
     onValue(conversationsRef, (snapshot) => {
@@ -154,6 +139,7 @@ const useChat = () => {
     }, { onlyOnce: true });
   };
 
+  // Démarrer une nouvelle conversation
   const startConversation = (userId, partnerId) => {
     const conversationRef = push(ref(database, 'conversations'));
     const conversationId = conversationRef.key;
@@ -170,20 +156,10 @@ const useChat = () => {
     setConversationEnded(false);
   };
 
+  // Arrêter une conversation
   const stopConversation = () => {
     if (conversationId) {
       update(ref(database, `conversations/${conversationId}`), { status: 'ended' });
-
-      const conversationRef = ref(database, `conversations/${conversationId}`);
-      onValue(conversationRef, (snapshot) => {
-        const conversation = snapshot.val();
-        if (conversation) {
-          conversation.participants.forEach(participantId => {
-            updateUserStatus(participantId, { chatting: false, waiting: false, partnerId: null });
-          });
-        }
-      });
-
       setConversationId(null);
       setChatting(false);
       setMessages([]);
@@ -191,16 +167,10 @@ const useChat = () => {
     }
   };
 
-  const switchConversation = () => {
-    if (conversationId) {
-      stopConversation();
-      setTimeout(() => findPartner(userId), 1000);  // Ajout d'un léger délai pour éviter les conflits de synchronisation
-    }
-  };
-
+  // Envoyer un message
   const sendMessage = (e) => {
     e.preventDefault();
-    if (message.trim() !== '' && conversationId) {
+    if (message.trim() && conversationId) {
       const messagesRef = ref(database, `conversations/${conversationId}/messages`);
       const newMessageRef = push(messagesRef);
       set(newMessageRef, { text: message, userId });
@@ -209,6 +179,7 @@ const useChat = () => {
     }
   };
 
+  // Surveiller la saisie
   const handleTyping = (e) => {
     setMessage(e.target.value);
     if (conversationId) {
@@ -226,7 +197,6 @@ const useChat = () => {
     setMessage,
     sendMessage,
     stopConversation,
-    switchConversation,
     handleTyping,
     partnerTyping
   };

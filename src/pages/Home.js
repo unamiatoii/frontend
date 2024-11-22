@@ -18,10 +18,11 @@ const Home = () => {
       setChattingCount(activeUsers.length);
     });
 
-    // Clean up the subscription
+    
     return () => off(usersRef, unsubscribe);
   }, []);
 
+  //Aller vers la page de chat
   const startChat = () => {
     navigate('/chat');
   };
