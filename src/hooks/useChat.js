@@ -1,170 +1,104 @@
-// src/hooks/useChat.js
 import { useState, useEffect } from 'react';
-import { ref, push, onChildAdded, onValue, set, update, remove, off } from 'firebase/database';
-import { database } from '../database/firebase';
+import { ref, push, onChildAdded, onValue, set, update, off } from 'firebase/database';
+import { database } from '../services/firebase';
 
-// Générer un identifiant unique pour chaque utilisateur
-const generateUniqueId = () => '_' + Math.random().toString(36).substr(2, 9);
+// Fonction pour encoder une adresse IP
+const encodeIp = (ip) => ip.replaceAll('.', '_');
+
+// Fonction pour récupérer l'adresse IP
+const fetchUserIp = async () => {
+  try {
+    const response = await fetch('https://api.ipify.org?format=json');
+    const data = await response.json();
+    return data.ip; // Retourne l'adresse IP
+  } catch (error) {
+    console.error("Erreur lors de la récupération de l'adresse IP:", error);
+    return null;
+  }
+};
 
 const useChat = () => {
-  // États pour gérer les informations et la logique de chat
-  const [userId, setUserId] = useState(null);
-  const [chatting, setChatting] = useState(false);
-  const [waitingForPartner, setWaitingForPartner] = useState(false);
-  const [conversationId, setConversationId] = useState(null);
-  const [message, setMessage] = useState('');
-  const [messages, setMessages] = useState([]);
-  const [conversationEnded, setConversationEnded] = useState(false);
-  const [partnerTyping, setPartnerTyping] = useState(false);
+  const [userIp, setUserIp] = useState(null); // Adresse IP brute
+  const [conversationId, setConversationId] = useState(null); // ID de la conversation
+  const [messages, setMessages] = useState([]); // Messages dans la conversation
+  const [message, setMessage] = useState(''); // Nouveau message en cours d'écriture
+  const [chatting, setChatting] = useState(false); // Indique si l'utilisateur est en train de discuter
+  const [waitingForPartner, setWaitingForPartner] = useState(false); // En attente d'un partenaire
 
-  // Initialiser l'utilisateur à la première utilisation
+  // Initialisation de l'utilisateur
   useEffect(() => {
-    let storedUserId = localStorage.getItem('userId');
-    if (!storedUserId) {
-      storedUserId = generateUniqueId();
-      localStorage.setItem('userId', storedUserId);
-    }
-    setUserId(storedUserId);
+    const initializeUser = async () => {
+      const ip = await fetchUserIp(); // Récupère l'adresse IP de l'utilisateur
+      if (!ip) return;
 
-    // Ajouter l'utilisateur à la base de données
-    addUser(storedUserId);
+      const encodedIp = encodeIp(ip); // Encode l'adresse IP pour Firebase
+      setUserIp(ip);
 
-    // Nettoyage lors du déchargement de la page
-    const handleBeforeUnload = () => removeUser(storedUserId);
-    window.addEventListener('beforeunload', handleBeforeUnload);
-
-    return () => {
-      window.removeEventListener('beforeunload', handleBeforeUnload);
-      removeUser(storedUserId);
-    };
-  }, []);
-
-  // Chercher un partenaire ou gérer une conversation existante
-  useEffect(() => {
-    if (userId) {
-      const userRef = ref(database, `users/${userId}`);
-      const unsubscribe = onValue(userRef, (snapshot) => {
+      const userRef = ref(database, `users/${encodedIp}`);
+      onValue(userRef, (snapshot) => {
         const user = snapshot.val();
         if (user && user.chatting) {
-          findExistingConversation(userId);
-        } else if (!user.waiting) {
-          findPartner(userId);
+          // L'utilisateur est déjà en conversation active
+          setConversationId(user.conversationId);
+          setChatting(true);
+        } else {
+          // Recherche d'un partenaire
+          findPartner(encodedIp);
         }
-      });
-      return () => off(userRef, unsubscribe);
-    }
-  }, [userId]);
+      }, { onlyOnce: true });
+    };
 
-  // Charger les messages et surveiller l'état de la conversation
-  useEffect(() => {
-    if (conversationId) {
-      const messagesRef = ref(database, `conversations/${conversationId}/messages`);
-      const unsubscribeMessages = onChildAdded(messagesRef, (snapshot) => {
-        const newMessage = snapshot.val();
-        setMessages((prevMessages) => [...prevMessages, newMessage]);
-      });
+    initializeUser();
+  }, []);
 
-      const conversationRef = ref(database, `conversations/${conversationId}`);
-      const unsubscribeConversation = onValue(conversationRef, (snapshot) => {
-        const conversation = snapshot.val();
-        if (conversation) {
-          if (conversation.status === 'ended') {
-            setChatting(false);
-            setConversationEnded(true);
-          }
-          setPartnerTyping(conversation.typing && conversation.typing !== userId);
-        }
-      });
-
-      return () => {
-        off(messagesRef, unsubscribeMessages);
-        off(conversationRef, unsubscribeConversation);
-      };
-    }
-  }, [conversationId]);
-
-  // Ajouter un utilisateur à la base
-  const addUser = (userId) => {
-    const userRef = ref(database, `users/${userId}`);
-    set(userRef, { userId, active: true, chatting: false, waiting: false });
+  // Ajouter un utilisateur à Firebase
+  const addUser = (encodedIp) => {
+    const userRef = ref(database, `users/${encodedIp}`);
+    set(userRef, { ip: encodedIp, chatting: false, waiting: true });
   };
 
-  // Supprimer un utilisateur de la base
-  const removeUser = (userId) => {
-    const userRef = ref(database, `users/${userId}`);
-    remove(userRef);
-  };
-
-  // Mettre à jour le statut d'un utilisateur
-  const updateUserStatus = (userId, status) => {
-    const userRef = ref(database, `users/${userId}`);
-    update(userRef, status);
-  };
-
-  // Trouver un partenaire de chat
-  const findPartner = (userId) => {
+  // Trouver un partenaire disponible
+  const findPartner = (encodedIp) => {
     const usersRef = ref(database, 'users');
     onValue(usersRef, (snapshot) => {
       const users = snapshot.val();
       if (users) {
-        const availableUsers = Object.keys(users).filter(id => 
-          id !== userId && users[id].active && !users[id].chatting);
+        // Trouve un utilisateur disponible
+        const availableUsers = Object.keys(users).filter(uid =>
+          uid !== encodedIp && !users[uid].chatting
+        );
 
         if (availableUsers.length > 0) {
-          const partnerId = availableUsers[Math.floor(Math.random() * availableUsers.length)];
-          startConversation(userId, partnerId);
+          const partnerIp = availableUsers[0]; // Prend le premier utilisateur disponible
+          startConversation(encodedIp, partnerIp);
         } else {
+          // Pas de partenaire disponible, attente
           setWaitingForPartner(true);
-          updateUserStatus(userId, { waiting: true });
-        }
-      }
-    }, { onlyOnce: true });
-  };
-
-  // Trouver une conversation existante
-  const findExistingConversation = (userId) => {
-    const conversationsRef = ref(database, 'conversations');
-    onValue(conversationsRef, (snapshot) => {
-      const conversations = snapshot.val();
-      if (conversations) {
-        for (let convId in conversations) {
-          const conv = conversations[convId];
-          if (conv.participants.includes(userId) && conv.status === 'active') {
-            setConversationId(convId);
-            setChatting(true);
-            break;
-          }
+          addUser(encodedIp);
         }
       }
     }, { onlyOnce: true });
   };
 
   // Démarrer une nouvelle conversation
-  const startConversation = (userId, partnerId) => {
+  const startConversation = (encodedIp, partnerIp) => {
     const conversationRef = push(ref(database, 'conversations'));
     const conversationId = conversationRef.key;
+
+    // Initialise la conversation
     set(conversationRef, {
-      participants: [userId, partnerId],
+      participants: [encodedIp, partnerIp],
       messages: [],
       status: 'active',
-      typing: null,
     });
-    updateUserStatus(userId, { chatting: true, partnerId, waiting: false });
-    updateUserStatus(partnerId, { chatting: true, partnerId: userId, waiting: false });
+
+    // Met à jour l'état des utilisateurs
+    update(ref(database, `users/${encodedIp}`), { chatting: true, conversationId });
+    update(ref(database, `users/${partnerIp}`), { chatting: true, conversationId });
+
     setConversationId(conversationId);
     setChatting(true);
-    setConversationEnded(false);
-  };
-
-  // Arrêter une conversation
-  const stopConversation = () => {
-    if (conversationId) {
-      update(ref(database, `conversations/${conversationId}`), { status: 'ended' });
-      setConversationId(null);
-      setChatting(false);
-      setMessages([]);
-      setWaitingForPartner(false);
-    }
+    setWaitingForPartner(false);
   };
 
   // Envoyer un message
@@ -172,33 +106,31 @@ const useChat = () => {
     e.preventDefault();
     if (message.trim() && conversationId) {
       const messagesRef = ref(database, `conversations/${conversationId}/messages`);
-      const newMessageRef = push(messagesRef);
-      set(newMessageRef, { text: message, userId });
-      setMessage('');
-      update(ref(database, `conversations/${conversationId}`), { typing: null });
+      push(messagesRef, { text: message, userIp });
+      setMessage(''); // Vide le champ de saisie après envoi
     }
   };
 
-  // Surveiller la saisie
-  const handleTyping = (e) => {
-    setMessage(e.target.value);
+  // Charger les messages en temps réel
+  useEffect(() => {
     if (conversationId) {
-      update(ref(database, `conversations/${conversationId}`), { typing: userId });
+      const messagesRef = ref(database, `conversations/${conversationId}/messages`);
+      const unsubscribe = onChildAdded(messagesRef, (snapshot) => {
+        const newMessage = snapshot.val();
+        setMessages((prevMessages) => [...prevMessages, newMessage]);
+      });
+      return () => off(messagesRef, unsubscribe);
     }
-  };
+  }, [conversationId]);
 
   return {
-    userId,
-    chatting,
-    waitingForPartner,
-    conversationEnded,
+    userIp,
     messages,
     message,
     setMessage,
     sendMessage,
-    stopConversation,
-    handleTyping,
-    partnerTyping
+    chatting,
+    waitingForPartner,
   };
 };
 
