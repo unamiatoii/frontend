@@ -13,7 +13,7 @@ const Chat = () => {
     message,
     sendMessage,
     stopConversation,
-    switchConversation,
+    restartChat,
     handleTyping,
     partnerTyping
   } = useChat();
@@ -21,42 +21,58 @@ const Chat = () => {
   return (
     <div className="chat-container">
       {chatting ? (
-        <div className="chat-box">
+        <div className="chat-box fade-in">
           <div className="messages">
             {messages.map((msg, index) => (
-              <div key={index} className={`message ${msg.userId === userId ? 'own' : ''}`}>
+              <div
+                key={index}
+                className={`message ${msg.userId === userId ? 'own slide-in-right' : 'slide-in-left'}`}
+              >
                 {msg.text}
               </div>
             ))}
-            {partnerTyping && <div className="message typing">Partner is typing...</div>}
+            {partnerTyping && (
+              <div className="message typing fade-in">
+                Entrain d'ecrire...
+              </div>
+            )}
           </div>
-          <form onSubmit={sendMessage}>
+          <form onSubmit={sendMessage} className="chat-form">
             <input
               type="text"
               value={message}
               onChange={handleTyping}
-              placeholder="Type your message..."
+              placeholder="Entre ton message..."
+              className="input-message"
             />
-            <button className='btn btn-success' type="submit">Send</button>
+            <button className="btn btn-success" type="submit">
+              Envoyer
+            </button>
           </form>
-          <div className='d-flex flex-direction-row justify-content-around mb-2'>  
-            <button className="btn btn-danger" onClick={stopConversation}>Stop</button>
-            <button className="btn btn-warning" onClick={switchConversation}>Skip</button>
+          <div className="controls d-flex flex-direction-row justify-content-around mb-2">
+            <button className="btn btn-danger" onClick={stopConversation}>
+              Arreter
+            </button>
+            <button className="btn btn-warning" onClick={restartChat}>
+              Suivant
+            </button>
           </div>
         </div>
       ) : conversationEnded ? (
-        <div className="waiting">
-          <p>Your partner has ended the chat.</p>
-          <div className='d-flex flex-direction-row justify-content-around mb-2'>  
-           <button className="btn btn-success" onClick={switchConversation}>Chatter à nouveau</button>
+        <div className="waiting fade-in">
+          <p>Votre partenaire a mis fin au chat.</p>
+          <div className="controls d-flex flex-direction-row justify-content-around mb-2">
+            <button className="btn btn-success" onClick={restartChat}>
+              Chatter à nouveau
+            </button>
           </div>
         </div>
       ) : (
-        <div className="waiting">
+        <div className="waiting fade-in">
           {waitingForPartner ? (
-            <p>Waiting for a partner to join...</p>
+            <p>Patience...</p>
           ) : (
-            <p>Finding a partner...</p>
+            <p>En attente d'un partenaire...</p>
           )}
         </div>
       )}

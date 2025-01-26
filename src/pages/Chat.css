@@ -21,8 +21,6 @@
   .chat-box {
     width: 100%;
     max-width: 600px;
-    height: 500px;
-    background-color: var(--color-brown);
     border-radius: 10px;
     box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
     display: flex;
@@ -95,4 +93,88 @@
     text-align: center;
     font-size: 1.2rem;
   }
-  
+  /* src/pages/Chat.css */
+
+
+
+/* Animations */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slide-in-left {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes slide-in-right {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+.fade-in {
+  animation: fade-in 0.5s ease-in-out;
+}
+
+.slide-in-left {
+  animation: slide-in-left 0.5s ease-in-out;
+}
+
+.slide-in-right {
+  animation: slide-in-right 0.5s ease-in-out;
+}
+
+.waiting {
+  text-align: center;
+  padding: 20px;
+  font-size: 18px;
+  color: #555;
+}
+
+.waiting p {
+  margin-bottom: 20px;
+  font-size: 16px;
+}
+
+
+/* Media query pour téléphones */
+@media screen and (max-width: 768px) {
+  .chat-container {
+   width: 100%;
+   padding: 0;
+  }
+  .chat-box {
+      width: 100%; /* Prend toute la largeur de l'écran */
+      height: calc(100vh - 2rem); /* Occupe presque toute la hauteur de l'écran */
+      border-radius: 0; /* Supprime les coins arrondis pour un design épuré */
+  }
+
+  .messages {
+      padding: 5px;
+  }
+
+  form {
+      padding: 5px;
+  }
+
+  input[type="text"] {
+      margin-right: 5px;
+  }
+
+  button {
+      padding: 8px 15px;
+  }
+}
