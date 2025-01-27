@@ -180,6 +180,35 @@ const useChat = () => {
     }
   };
 
+const stopSearchingPartner = async () => {
+  try {
+    // Réinitialiser l'état utilisateur dans Firebase
+    await update(ref(database, `users/${userId}`), {
+      active: false,
+      chatting: false,
+      waiting: false,
+      conversationId: null,
+      partnerId: null,
+    });
+
+    console.log("Recherche arrêtée.");
+
+    // Réinitialiser les états locaux
+    setWaitingForPartner(false); // Arrête l'attente localement
+    setChatting(false); // Assure que l'utilisateur n'est pas considéré comme en chat
+    setConversationEnded(false); // Réinitialise les états terminaux
+    setMessages([]); // Vide les messages
+
+    // Supprimer tout écouteur Firebase
+    off(ref(database, `users/${userId}`));
+
+    console.log("Écouteurs Firebase supprimés.");
+  } catch (error) {
+    console.error("Erreur lors de l'arrêt de la recherche :", error);
+  }
+};
+
+  
   const restartChat = async () => {
     console.log("Redémarrage du chat...");
     try {
@@ -245,6 +274,7 @@ const useChat = () => {
     restartChat,
     stopConversation,
     handleTyping,
+    stopSearchingPartner,
     partnerTyping,
   };
 };

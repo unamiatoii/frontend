@@ -16,7 +16,8 @@ const Chat = () => {
     stopConversation,
     restartChat,
     handleTyping,
-    partnerTyping
+    stopSearchingPartner,
+    partnerTyping,
   } = useChat();
 
   return (
@@ -34,7 +35,7 @@ const Chat = () => {
             ))}
             {partnerTyping && (
               <div className="message typing fade-in">
-                <FontAwesomeIcon icon={faSpinner} spin /> Entrain d'écrire...
+                <FontAwesomeIcon icon={faSpinner} spin /> En train d'écrire...
               </div>
             )}
           </div>
@@ -71,11 +72,23 @@ const Chat = () => {
       ) : (
         <div className="waiting fade-in">
           {waitingForPartner ? (
-            <p>
-              <FontAwesomeIcon icon={faSpinner} spin /> Patience...
-            </p>
+            <div className="searching">
+              <p>
+                <FontAwesomeIcon icon={faSpinner} spin /> Recherche d'un partenaire...
+              </p>
+              <button className="btn btn-danger" onClick={stopSearchingPartner}>
+                <FontAwesomeIcon icon={faStop} /> Arrêter la recherche
+              </button>
+            </div>
           ) : (
-            <p>En attente d'un partenaire...</p>
+            <div>
+
+              <div className="controls d-flex flex-direction-row justify-content-around mb-2">
+              <button className="btn btn-success" onClick={restartChat}>
+              <FontAwesomeIcon icon={faRedo} /> Chatter à nouveau
+            </button>
+              </div>
+            </div>
           )}
         </div>
       )}
