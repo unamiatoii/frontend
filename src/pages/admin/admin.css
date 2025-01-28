@@ -1,0 +1,45 @@
+/* admin.css */
+.admin-dashboard {
+    margin: 20px;
+  }
+  
+  .admin-dashboard h2 {
+    text-align: center;
+  }
+  
+  .user-list {
+    display: flex;
+    flex-wrap: wrap;
+  }
+  
+  .user-card {
+    background-color: #f0f0f0;
+    border: 1px solid #ddd;
+    padding: 10px;
+    margin: 10px;
+    width: 250px;
+    border-radius: 8px;
+  }
+  
+  .user-card p {
+    font-size: 14px;
+  }
+  
+  button {
+    margin: 5px;
+    padding: 8px;
+    background-color: #f44336;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+  
+  button:hover {
+    background-color: #e53935;
+  }
+  
+  button:disabled {
+    background-color: #ccc;
+  }
+  

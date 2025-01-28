@@ -1,5 +1,6 @@
 // src/firebase.js
 import { initializeApp } from "firebase/app";
+import { getAuth } from "firebase/auth";  // Importez getAuth pour l'authentification
 import { getDatabase } from "firebase/database";
 
 const firebaseConfig = {
@@ -15,6 +16,10 @@ const firebaseConfig = {
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
+
+// Obtenez auth et database
+const auth = getAuth(app);
 const database = getDatabase(app);
 
-export { database };
+// Exportez les objets nécessaires
+export { auth, database }; // Ajoutez l'export de auth
