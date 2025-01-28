@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import { ref, push, onChildAdded, onValue, set, update, remove, off, get } from "firebase/database";
 import { database } from './../database/firebase';
+import useLogin from './loginHook';
 
 const useChat = () => {
-  const [userId, setUserId] = useState(null);
+  const { user } = useLogin();
   const [chatting, setChatting] = useState(false);
   const [waitingForPartner, setWaitingForPartner] = useState(false);
   const [conversationId, setConversationId] = useState(null);
@@ -56,50 +57,43 @@ const useChat = () => {
         setChatting(false);
         setConversationEnded(true);
       }
-      setPartnerTyping(conversation?.typing && conversation.typing !== userId);
+      setPartnerTyping(conversation?.typing && conversation.typing !== user?.uid);
     });
 
     return () => {
       off(messagesRef, unsubscribeMessages);
       off(conversationRef, unsubscribeConversation);
     };
-  }, [userId]);
+  }, [user?.uid]);
 
-  // Generate or fetch a unique user ID on first render
   useEffect(() => {
-    let userId = localStorage.getItem('userId');
-    if (!userId) {
-      userId = `user_${Date.now()}`;
-      localStorage.setItem('userId', userId);
-    }
-    setUserId(userId);
-    addUser(userId);
+    if (user) {
+      const userId = user.uid;
+      addUser(userId);
 
-    return () => {
-      if (userId) {
+      return () => {
         removeUser(userId);
-      }
-    };
-  }, [addUser, removeUser]);
+      };
+    }
+  }, [user, addUser, removeUser]);
 
-  // Listen for user state changes
   useEffect(() => {
-    if (userId) {
-      const userRef = ref(database, `users/${userId}`);
+    if (user?.uid) {
+      const userRef = ref(database, `users/${user.uid}`);
       const unsubscribe = onValue(userRef, (snapshot) => {
-        const user = snapshot.val();
-        if (user?.conversationId) {
-          setConversationId(user.conversationId);
+        const userData = snapshot.val();
+        if (userData?.conversationId) {
+          setConversationId(userData.conversationId);
           setChatting(true);
-          listenToConversation(user.conversationId);
-        } else if (!user?.chatting && !user?.waiting) {
-          findPartner(userId);
+          listenToConversation(userData.conversationId);
+        } else if (!userData?.chatting && !userData?.waiting) {
+          findPartner(user.uid);
         }
       });
 
       return () => off(userRef, unsubscribe);
     }
-  }, [userId, findPartner, listenToConversation]);
+  }, [user?.uid, findPartner, listenToConversation]);
 
   const startConversation = async (userId, partnerId) => {
     try {
@@ -128,8 +122,6 @@ const useChat = () => {
     }
   };
 
-
-  // Arrêter la conversation
   const stopConversation = async () => {
     if (conversationId) {
       try {
@@ -160,110 +152,93 @@ const useChat = () => {
     }
   };
 
-  // Envoyer un message
   const sendMessage = (e) => {
     e.preventDefault();
     if (message.trim() && conversationId) {
       const messagesRef = ref(database, `conversations/${conversationId}/messages`);
       const newMessageRef = push(messagesRef);
-      set(newMessageRef, { text: message, userId });
+      set(newMessageRef, { text: message, userId: user?.uid });
       setMessage('');
       update(ref(database, `conversations/${conversationId}`), { typing: null });
     }
   };
 
-  // Gérer la saisie
   const handleTyping = (e) => {
     setMessage(e.target.value);
     if (conversationId) {
-      update(ref(database, `conversations/${conversationId}`), { typing: userId });
+      update(ref(database, `conversations/${conversationId}`), { typing: user?.uid });
     }
   };
 
-const stopSearchingPartner = async () => {
-  try {
-    // Réinitialiser l'état utilisateur dans Firebase
-    await update(ref(database, `users/${userId}`), {
-      active: false,
-      chatting: false,
-      waiting: false,
-      conversationId: null,
-      partnerId: null,
-    });
-
-    console.log("Recherche arrêtée.");
-
-    // Réinitialiser les états locaux
-    setWaitingForPartner(false); // Arrête l'attente localement
-    setChatting(false); // Assure que l'utilisateur n'est pas considéré comme en chat
-    setConversationEnded(false); // Réinitialise les états terminaux
-    setMessages([]); // Vide les messages
-
-    // Supprimer tout écouteur Firebase
-    off(ref(database, `users/${userId}`));
-
-    console.log("Écouteurs Firebase supprimés.");
-  } catch (error) {
-    console.error("Erreur lors de l'arrêt de la recherche :", error);
-  }
-};
-
-  
-  const restartChat = async () => {
-    console.log("Redémarrage du chat...");
+  const stopSearchingPartner = async () => {
     try {
-      // Réinitialiser l'état utilisateur dans Firebase
-      await update(ref(database, `users/${userId}`), {
+      await update(ref(database, `users/${user?.uid}`), {
+        active: false,
+        chatting: false,
+        waiting: false,
+        conversationId: null,
+        partnerId: null,
+      });
+
+      console.log("Recherche arrêtée.");
+
+      setWaitingForPartner(false);
+      setChatting(false);
+      setConversationEnded(false);
+      setMessages([]);
+
+      off(ref(database, `users/${user?.uid}`));
+
+      console.log("Écouteurs Firebase supprimés.");
+    } catch (error) {
+      console.error("Erreur lors de l'arrêt de la recherche :", error);
+    }
+  };
+
+  const restartChat = async () => {
+    try {
+      await update(ref(database, `users/${user?.uid}`), {
         active: true,
         chatting: false,
         waiting: true,
         conversationId: null,
         partnerId: null,
       });
-      console.log("Mise à jour Firebase réussie.");
-  
-      // Réinitialiser les états locaux
+
       setChatting(false);
       setWaitingForPartner(true);
       setConversationEnded(false);
       setMessages([]);
       setPartnerTyping(false);
-  
-      console.log("État local réinitialisé.");
-  
-      // Recherche directe d'un nouveau partenaire
+
       const usersRef = ref(database, 'users');
       const snapshot = await get(usersRef);
-  
+
       if (snapshot.exists()) {
         const users = snapshot.val();
         const availableUsers = Object.keys(users).filter(
           (id) =>
-            id !== userId &&
+            id !== user?.uid &&
             users[id]?.active &&
             !users[id]?.chatting &&
             users[id]?.waiting
         );
-  
+
         if (availableUsers.length > 0) {
-          setWaitingForPartner(false); // Arrêter l'indicateur de recherche
+          setWaitingForPartner(false);
           const partnerId = availableUsers[Math.floor(Math.random() * availableUsers.length)];
-          await startConversation(userId, partnerId);
+          await startConversation(user?.uid, partnerId);
         } else {
-          console.log("Aucun partenaire disponible, attente...");
-          setWaitingForPartner(true); // Indiquer que l'utilisateur est en attente
-        }        
-      } else {
-        console.log("Aucun utilisateur trouvé dans Firebase.");
+          setWaitingForPartner(true);
+        }
       }
     } catch (error) {
       console.error("Erreur lors du redémarrage du chat :", error);
     }
   };
-  
 
   return {
-    userId,
+    userId: user?.uid,
     chatting,
     waitingForPartner,
     conversationEnded,
